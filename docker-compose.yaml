@@ -1,0 +1,16 @@
+services:
+  postgres:
+    container_name: postgres-container
+    image: postgres:14
+    environment:
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'postgres'
+      POSTGRES_DB: 'NY_taxi'
+    ports:
+      - '5432:5432'
+    volumes:
+      - vol-data:/var/lib/postgres/data
+
+volumes:
+  vol-data:
+    name: vol-data
