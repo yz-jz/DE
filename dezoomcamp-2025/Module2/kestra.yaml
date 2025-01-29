@@ -1,0 +1,305 @@
+id: module2
+namespace: dev
+
+inputs:
+  - id: taxi
+    type: SELECT
+    values: ["green","yellow"]
+  #- id: month
+   # type: SELECT
+    #values: ["01","02","03","04","05","06","07","08","09","10","11","12"]
+  #- id: year
+   # type: SELECT
+    #values: ["2019","2020","2021"]
+
+variables:
+  dataset_url: https://github.com/DataTalksClub/nyc-tlc-data/releases/download
+  filename: _tripdata_
+  trigger_date: "{{trigger.date | date('yyyy-MM')}}"
+  gcs_bucket: gs://module2dzoomcamp
+  project_id: my_project_id
+  dataset_id: module2
+  staging_table: "{{inputs.taxi}}_tripdata_staging"
+  table: "{{inputs.taxi}}_tripdata"
+
+tasks:
+  - id: extract
+    type: io.kestra.plugin.core.http.Download
+    uri: "{{vars.dataset_url}}/{{inputs.taxi}}/{{inputs.taxi}}{{vars.filename}}{{render(vars.trigger_date)}}.csv.gz"
+    retry:
+      type: constant
+      interval: PT10S
+      maxAttempt: 4
+      warningOnRetry: true
+
+
+
+  - id: unzip
+    type: io.kestra.plugin.compress.FileDecompress
+    from: "{{outputs.extract.uri}}"
+    compression: GZIP
+    retry:
+      type: constant
+      interval: PT10S
+      maxAttempt: 4
+      warningOnRetry: true
+
+  
+  - id: upload_to_gcs
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{outputs.unzip.uri}}"
+    to: "{{vars.gcs_bucket}}/{{inputs.taxi}}{{vars.filename}}{{render(vars.trigger_date)}}.csv"
+    retry:
+      type: constant
+      interval: PT10S
+      maxAttempt: 4
+      warningOnRetry: true
+
+  - id: if_yellow_taxi
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{inputs.taxi == 'yellow'}}"
+    then:
+      - id: yellow_create_table
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          CREATE TABLE IF NOT EXISTS `{{ vars.project_id }}.{{ vars.dataset_id }}.{{render(vars.table)}}`  (
+              unique_row_id BYTES,
+              filename STRING,      
+              VendorID STRING,
+              tpep_pickup_datetime TIMESTAMP,
+              tpep_dropoff_datetime TIMESTAMP,
+              passenger_count NUMERIC,
+              trip_distance NUMERIC,
+              RatecodeID STRING,
+              store_and_fwd_flag STRING,
+              PULocationID STRING,
+              DOLocationID STRING,
+              payment_type NUMERIC,
+              fare_amount NUMERIC,
+              extra NUMERIC,
+              mta_tax NUMERIC,
+              tip_amount NUMERIC,
+              tolls_amount NUMERIC,
+              improvement_surcharge NUMERIC,
+              total_amount NUMERIC,
+              congestion_surcharge NUMERIC
+          )
+          PARTITION BY DATE(tpep_pickup_datetime);
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+
+      - id: yellow_create_staging_table
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          CREATE OR REPLACE EXTERNAL TABLE `{{ vars.project_id }}.{{ vars.dataset_id }}.{{ render(vars.staging_table) }}` (
+              VendorID STRING,
+              tpep_pickup_datetime TIMESTAMP,
+              tpep_dropoff_datetime TIMESTAMP,
+              passenger_count NUMERIC,
+              trip_distance NUMERIC,
+              RatecodeID STRING,
+              store_and_fwd_flag STRING,
+              PULocationID STRING,
+              DOLocationID STRING,
+              payment_type NUMERIC,
+              fare_amount NUMERIC,
+              extra NUMERIC,
+              mta_tax NUMERIC,
+              tip_amount NUMERIC ,
+              tolls_amount NUMERIC ,
+              improvement_surcharge NUMERIC,
+              total_amount NUMERIC,
+              congestion_surcharge NUMERIC
+              )
+              OPTIONS (
+              format = 'CSV',
+              uris = ['{{render(outputs.upload_to_gcs.uri)}}'],
+              skip_leading_rows = 1,
+              ignore_unknown_values = TRUE
+              )
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+      
+      - id: yellow_transform
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          SELECT
+            MD5(CONCAT(
+              COALESCE(CAST(VendorID AS STRING), ""),
+              COALESCE(CAST(tpep_pickup_datetime AS STRING), ""),
+              COALESCE(CAST(tpep_dropoff_datetime AS STRING), ""),
+              COALESCE(CAST(PULocationID AS STRING), ""),
+              COALESCE(CAST(DOLocationID AS STRING), "")
+            )) AS unique_row_id,
+            "{{render(vars.filename)}}" AS filename,
+            *
+          FROM `{{vars.project_id}}.{{vars.dataset_id}}.{{render(vars.staging_table)}}`;
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+
+      - id: yellow_merge
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          MERGE INTO `{{ vars.project_id }}.{{ vars.dataset_id }}.{{render(vars.table)}}` T
+          USING `{{ outputs.yellow_transform.destinationTable['project'] }}.{{ outputs.yellow_transform.destinationTable['dataset'] }}.{{ outputs.yellow_transform.destinationTable['table'] }}` S
+          ON T.unique_row_id = S.unique_row_id
+          WHEN NOT MATCHED THEN
+          INSERT (unique_row_id, filename, VendorID, tpep_pickup_datetime, tpep_dropoff_datetime, passenger_count, trip_distance, RatecodeID, store_and_fwd_flag, PULocationID, DOLocationID, payment_type, fare_amount, extra, mta_tax, tip_amount, tolls_amount, improvement_surcharge, total_amount, congestion_surcharge)
+          VALUES (S.unique_row_id, S.filename, S.VendorID, S.tpep_pickup_datetime, S.tpep_dropoff_datetime, S.passenger_count, S.trip_distance, S.RatecodeID, S.store_and_fwd_flag, S.PULocationID, S.DOLocationID, S.payment_type, S.fare_amount, S.extra, S.mta_tax, S.tip_amount, S.tolls_amount, S.improvement_surcharge, S.total_amount, S.congestion_surcharge);
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+
+  - id: if_greentaxi
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{inputs.taxi == 'green'}}"
+    then:
+      - id: green_create_table
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          CREATE TABLE IF NOT EXISTS `{{ vars.project_id }}.{{ vars.dataset_id }}.{{render(vars.table)}}`  (
+              unique_row_id BYTES,
+              filename STRING,      
+              VendorID STRING,
+              tpep_pickup_datetime TIMESTAMP,
+              tpep_dropoff_datetime TIMESTAMP,
+              passenger_count STRING,
+              trip_distance NUMERIC,
+              RatecodeID STRING,
+              store_and_fwd_flag STRING,
+              PULocationID STRING,
+              DOLocationID STRING,
+              payment_type NUMERIC,
+              fare_amount NUMERIC,
+              extra NUMERIC,
+              mta_tax NUMERIC,
+              tip_amount NUMERIC,
+              tolls_amount NUMERIC,
+              improvement_surcharge NUMERIC,
+              total_amount NUMERIC,
+              congestion_surcharge NUMERIC
+          )
+          PARTITION BY DATE(tpep_pickup_datetime);
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+
+      - id: green_create_staging_table
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          CREATE OR REPLACE EXTERNAL TABLE `{{ vars.project_id }}.{{ vars.dataset_id }}.{{ render(vars.staging_table) }}` (
+              VendorID STRING,
+              tpep_pickup_datetime TIMESTAMP,
+              tpep_dropoff_datetime TIMESTAMP,
+              passenger_count STRING,
+              trip_distance NUMERIC,
+              RatecodeID STRING,
+              store_and_fwd_flag STRING,
+              PULocationID STRING,
+              DOLocationID STRING,
+              payment_type NUMERIC,
+              fare_amount NUMERIC,
+              extra NUMERIC,
+              mta_tax NUMERIC,
+              tip_amount NUMERIC ,
+              tolls_amount NUMERIC ,
+              improvement_surcharge NUMERIC,
+              total_amount NUMERIC,
+              congestion_surcharge NUMERIC
+              )
+              OPTIONS (
+              format = 'CSV',
+              uris = ['{{render(outputs.upload_to_gcs.uri)}}'],
+              skip_leading_rows = 1,
+              ignore_unknown_values = TRUE
+              )
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+      
+      - id: green_transform
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          SELECT
+            MD5(CONCAT(
+              COALESCE(CAST(VendorID AS STRING), ""),
+              COALESCE(CAST(tpep_pickup_datetime AS STRING), ""),
+              COALESCE(CAST(tpep_dropoff_datetime AS STRING), ""),
+              COALESCE(CAST(PULocationID AS STRING), ""),
+              COALESCE(CAST(DOLocationID AS STRING), "")
+            )) AS unique_row_id,
+            "{{render(vars.filename)}}" AS filename,
+            *
+          FROM `{{vars.project_id}}.{{vars.dataset_id}}.{{render(vars.staging_table)}}`;
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+
+      - id: green_merge
+        type: io.kestra.plugin.gcp.bigquery.Query
+        sql: |
+          MERGE INTO `{{ vars.project_id }}.{{ vars.dataset_id }}.{{render(vars.table)}}` T
+          USING `{{ outputs.green_transform.destinationTable['project'] }}.{{ outputs.green_transform.destinationTable['dataset'] }}.{{ outputs.green_transform.destinationTable['table'] }}` S
+          ON T.unique_row_id = S.unique_row_id
+          WHEN NOT MATCHED THEN
+          INSERT (unique_row_id, filename, VendorID, tpep_pickup_datetime, tpep_dropoff_datetime, passenger_count, trip_distance, RatecodeID, store_and_fwd_flag, PULocationID, DOLocationID, payment_type, fare_amount, extra, mta_tax, tip_amount, tolls_amount, improvement_surcharge, total_amount, congestion_surcharge)
+          VALUES (S.unique_row_id, S.filename, S.VendorID, S.tpep_pickup_datetime, S.tpep_dropoff_datetime, S.passenger_count, S.trip_distance, S.RatecodeID, S.store_and_fwd_flag, S.PULocationID, S.DOLocationID, S.payment_type, S.fare_amount, S.extra, S.mta_tax, S.tip_amount, S.tolls_amount, S.improvement_surcharge, S.total_amount, S.congestion_surcharge);
+        retry:
+          type: constant
+          interval: PT10S
+          maxAttempt: 4
+          warningOnRetry: true
+
+  - id: purge_gcs
+    type: io.kestra.plugin.gcp.gcs.Delete
+    uri: "{{ outputs.upload_to_gcs.uri }}"
+    retry:
+      type: constant
+      interval: PT10S
+      maxAttempt: 4
+      warningOnRetry: true
+
+  - id: purge_files
+    type: io.kestra.plugin.core.storage.PurgeCurrentExecutionFiles
+    retry:
+      type: constant
+      interval: PT10S
+      maxAttempt: 4
+      warningOnRetry: true
+
+triggers:
+  - id: monthly
+    type: io.kestra.plugin.core.trigger.Schedule
+    timezone: America/New_York
+    cron: "0 0 1 * *"
+
+pluginDefaults:
+  - type: io.kestra.plugin.jdbc.postgresql
+    values:
+      url: jdbc:postgresql://postgres:5432/kestra
+      username: kestra
+      password: k3str4
+  - type: io.kestra.plugin.gcp.gcs
+    values:
+      serviceAccount: "{{ secret('GCP') }}"
+  - type: io.kestra.plugin.gcp.bigquery
+    values:
+      projectId: "{{ vars.project_id }}"
+      serviceAccount: "{{ secret('GCP') }}"
