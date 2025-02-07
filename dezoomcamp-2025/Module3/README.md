@@ -1,45 +1,45 @@
-#Module 3 HW
+# Module 3 HW
 
-##Question1:
-###Count of records Yellow Taxi Data 2024:
+## Question1:
+### Count of records Yellow Taxi Data 2024:
 
-```sql
+``` sql
 SELECT COUNT(1) FROM `projectID.module3.yellow_tripdata`
 ```
 
 ##Question2:
 ###Distinct number of PULocationIDs for the entire dataset
 1. External Table:
-```sql
+``` sql
 SELECT COUNT(DISTINCT PULocationID) FROM `projectID.module3.yellow_tripdata_external`
 ```
 
 2. Materialized Table:
-```sql
+``` sql
 SELECT COUNT(DISTINCT PULocationID) FROM `projectID.module3.yellow_tripdata`
 ```
 
-##Question3:
-###Retrieve PULocationID from materialized table
+## Question3:
+### Retrieve PULocationID from materialized table
 1. PULocationID
 ```sql
 SELECT PULocationID FROM `projectID.module3.yellow_tripdata`;
 ```
 
 2. PULocationID and DOLocationID
-```sql
+``` sql
 SELECT PULocationID, DOLocationID FROM `projectID.module3.yellow_tripdata`;
 ```
-##Question4:
-###Number of records with fare_amount of 0:
+## Question4:
+### Number of records with fare_amount of 0:
 ```sql
 SELECT COUNT(1) FROM `projectID.module3.yellow_tripdata` WHERE fare_amount = 0
 ```
 
-##Question5:
-###Best strategy to make an optimized table in Big Query when query will always filter based on tpep_dropoff_datetime and order the results by VendorID
+## Question5:
+### Best strategy to make an optimized table in Big Query when query will always filter based on tpep_dropoff_datetime and order the results by VendorID
 #### Table creation:
-```sql
+``` sql
 CREATE TABLE IF NOT EXISTS `projectID.module3.yellow_tripdata_optimized` (
   VendorID INTEGER, 
   tpep_pickup_datetime TIMESTAMP,	
@@ -70,16 +70,16 @@ INSERT INTO `projectID.module3.yellow_tripdata_optimized` (
 )
 ```
 
-##Question6:
-###Query to retrieve the distinct VendorIDs between tpep_dropoff_datetime 2024-03-01 and 2024-03-15 (inclusive)
+## Question6:
+### Query to retrieve the distinct VendorIDs between tpep_dropoff_datetime 2024-03-01 and 2024-03-15 (inclusive)
 1. Non-partitioned
 
-```sql
+``` sql
 SELECT DISTINCT(VendorID) FROM `projectID.module3.yellow_tripdata` WHERE tpep_dropoff_datetime >= '2024-03-01' AND tpep_dropoff_datetime <= '2024-03-31'
 ```
 
 2. Partitioned
 
-```sql
+``` sql
 SELECT DISTINCT(VendorID) FROM `projectID.module3.yellow_tripdata_optimized` WHERE tpep_dropoff_datetime >= '2024-03-01' AND tpep_dropoff_datetime <= '2024-03-31'
 ```
