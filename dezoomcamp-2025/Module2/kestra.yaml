@@ -17,7 +17,7 @@ variables:
   filename: _tripdata_
   trigger_date: "{{trigger.date | date('yyyy-MM')}}"
   gcs_bucket: gs://module2dzoomcamp
-  project_id: my_project_id
+  project_id: central-catcher-448814-j1
   dataset_id: module2
   staging_table: "{{inputs.taxi}}_tripdata_staging"
   table: "{{inputs.taxi}}_tripdata"
