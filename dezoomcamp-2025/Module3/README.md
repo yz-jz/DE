@@ -75,11 +75,15 @@ INSERT INTO `projectID.module3.yellow_tripdata_optimized` (
 1. Non-partitioned
 
 ``` sql
-SELECT DISTINCT(VendorID) FROM `projectID.module3.yellow_tripdata` WHERE tpep_dropoff_datetime >= '2024-03-01' AND tpep_dropoff_datetime <= '2024-03-31'
+SELECT DISTINCT(VendorID) FROM `projectID.module3.yellow_tripdata` 
+    WHERE tpep_dropoff_datetime >= '2024-03-01' 
+    AND tpep_dropoff_datetime <= '2024-03-31'
 ```
 
 2. Partitioned
 
 ``` sql
-SELECT DISTINCT(VendorID) FROM `projectID.module3.yellow_tripdata_optimized` WHERE tpep_dropoff_datetime >= '2024-03-01' AND tpep_dropoff_datetime <= '2024-03-31'
+SELECT DISTINCT(VendorID) FROM `projectID.module3.yellow_tripdata_optimized` 
+    WHERE tpep_dropoff_datetime >= '2024-03-01' 
+    AND tpep_dropoff_datetime <= '2024-03-31'
 ```
