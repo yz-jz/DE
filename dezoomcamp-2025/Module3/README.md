@@ -7,8 +7,8 @@
 SELECT COUNT(1) FROM `projectID.module3.yellow_tripdata`
 ```
 
-##Question2:
-###Distinct number of PULocationIDs for the entire dataset
+## Question2:
+### Distinct number of PULocationIDs for the entire dataset
 1. External Table:
 ``` sql
 SELECT COUNT(DISTINCT PULocationID) FROM `projectID.module3.yellow_tripdata_external`
@@ -37,7 +37,7 @@ SELECT COUNT(1) FROM `projectID.module3.yellow_tripdata` WHERE fare_amount = 0
 ```
 
 ## Question5:
-### Best strategy to make an optimized table in Big Query when query will always filter based on tpep_dropoff_datetime and order the results by VendorID
+#### Best strategy to make an optimized table in Big Query when query will always filter based on tpep_dropoff_datetime and order the results by VendorID
 #### Table creation:
 ``` sql
 CREATE TABLE IF NOT EXISTS `projectID.module3.yellow_tripdata_optimized` (
