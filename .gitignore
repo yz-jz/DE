@@ -1,4 +1,12 @@
-*.csv
 .env
+.dlt
+*.csv
 *.json
 load_module3.py
+secrets.toml
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+# ignore duckdb
+*.duckdb
+*.wal
