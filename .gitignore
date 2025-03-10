@@ -1,5 +1,6 @@
 .env
 .dlt
+*.parquet
 *.csv
 *.json
 load_module3.py
@@ -10,3 +11,5 @@ secrets.toml
 # ignore duckdb
 *.duckdb
 *.wal
+*.bak
+*.gz
