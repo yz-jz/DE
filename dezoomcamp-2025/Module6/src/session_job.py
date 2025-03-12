@@ -26,14 +26,15 @@ def create_events_source_kafka(t_env):
     table_name = "events"
     source_ddl = f"""
         CREATE TABLE {table_name} (
-            lpep_pickup_datetime VARCHAR,
-            lpep_dropoff_datetime VARCHAR,
+            lpep_pickup_datetime BIGINT,
+            lpep_dropoff_datetime BIGINT,
             PULocationID INTEGER,
             DOLocationID INTEGER,
             passenger_count INTEGER,
             trip_distance INTEGER,
             tip_amount DOUBLE,
-            WATERMARK FOR lpep_pickup_datetime AS lpep_pickup_datetime - INTERVAL '5' SECOND
+            wm AS TO_TIMESTAMP_LTZ(lpep_dropoff_datetime,3),
+            WATERMARK FOR wm AS wm - INTERVAL '5' SECOND
         ) WITH (
             'connector' = 'kafka',
             'properties.bootstrap.servers' = 'redpanda-1:29092',
@@ -79,7 +80,7 @@ def log_aggregation():
             DOLocationID,
             COUNT(*) AS longest_streak
         FROM TABLE(
-            SESSION(TABLE {source_table}, DESCRIPTOR(watermarked_event), INTERVAL '5' MINUTE)
+            SESSION(TABLE {source_table}, DESCRIPTOR(wm), INTERVAL '5' MINUTE)
         )
         GROUP BY PULocationID, DOLocationID;
         

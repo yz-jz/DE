@@ -15,6 +15,10 @@ data = data.select([
     'tip_amount'
 ])
 
+data = data.with_columns(
+    pl.col("lpep_dropoff_datetime").str.to_datetime("%Y-%m-%d %H:%M:%S").dt.timestamp("ms")
+)
+
 messages = data.to_dicts()
 
 def json_serializer(data):
